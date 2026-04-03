@@ -69,9 +69,9 @@ func mockStreamEvent(event string) string {
 func testServer(runner *fakeRunner) (*httptest.Server, *fakeRunner) {
 	var srv *Server
 	if isRealCLI() {
-		srv = New("127.0.0.1", 0, 10)
+		srv = NewCLI("127.0.0.1", 0, 10)
 	} else {
-		srv = NewWithRunner("127.0.0.1", 0, runner)
+		srv = NewCLIWithRunner("127.0.0.1", 0, runner)
 	}
 	return httptest.NewServer(srv.Handler()), runner
 }
@@ -486,7 +486,7 @@ func TestE2E_Messages_AllModels(t *testing.T) {
 			runner := &fakeRunner{
 				result: &types.CLIResult{Result: "ok", StopReason: "end_turn"},
 			}
-			srv := NewWithRunner("127.0.0.1", 0, runner)
+			srv := NewCLIWithRunner("127.0.0.1", 0, runner)
 			ts := httptest.NewServer(srv.Handler())
 			defer ts.Close()
 
@@ -578,7 +578,7 @@ func TestE2E_Messages_CLIError(t *testing.T) {
 	}
 
 	runner := &fakeRunner{err: fmt.Errorf("CLI crashed")}
-	srv := NewWithRunner("127.0.0.1", 0, runner)
+	srv := NewCLIWithRunner("127.0.0.1", 0, runner)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -699,7 +699,7 @@ func TestE2E_Messages_StreamingCLIError(t *testing.T) {
 	}
 
 	runner := &fakeRunner{err: fmt.Errorf("stream start failed")}
-	srv := NewWithRunner("127.0.0.1", 0, runner)
+	srv := NewCLIWithRunner("127.0.0.1", 0, runner)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -754,7 +754,7 @@ func TestE2E_ConcurrencyLimit(t *testing.T) {
 	}
 
 	// maxConcurrent=1: all requests must serialize
-	srv := NewWithRunner("127.0.0.1", 0, slow)
+	srv := NewCLIWithRunner("127.0.0.1", 0, slow)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -797,7 +797,7 @@ func TestE2E_ConcurrencyLimit_WithCLIRunner(t *testing.T) {
 	sem := make(chan struct{}, 1)
 	limited := &semRunner{inner: slow, sem: sem}
 
-	srv := NewWithRunner("127.0.0.1", 0, limited)
+	srv := NewCLIWithRunner("127.0.0.1", 0, limited)
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

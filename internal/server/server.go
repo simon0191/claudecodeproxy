@@ -12,27 +12,44 @@ import (
 	"time"
 
 	"claudecodeproxy/internal/claude"
+	"claudecodeproxy/internal/proxy"
 )
 
 type Server struct {
-	host   string
-	port   int
-	runner claude.Runner
+	host            string
+	port            int
+	messagesHandler http.HandlerFunc
 }
 
-func New(host string, port int, maxConcurrent int) *Server {
-	return &Server{host: host, port: port, runner: claude.NewCLIRunner(maxConcurrent)}
+// NewCLI creates a server in CLI mode (shells out to claude).
+func NewCLI(host string, port int, maxConcurrent int) *Server {
+	runner := claude.NewCLIRunner(maxConcurrent)
+	return NewCLIWithRunner(host, port, runner)
 }
 
-// NewWithRunner creates a server with a custom CLI runner (for testing).
-func NewWithRunner(host string, port int, runner claude.Runner) *Server {
-	return &Server{host: host, port: port, runner: runner}
+// NewCLIWithRunner creates a CLI-mode server with a custom runner (for testing).
+func NewCLIWithRunner(host string, port int, runner claude.Runner) *Server {
+	s := &Server{host: host, port: port}
+	s.messagesHandler = s.makeCLIHandler(runner)
+	return s
+}
+
+// NewPassthrough creates a server that forwards requests to the Anthropic API.
+func NewPassthrough(host string, port int, auth proxy.AuthConfig, baseURL string) *Server {
+	p := proxy.NewPassthrough(auth, baseURL)
+	return &Server{host: host, port: port, messagesHandler: p.Handle}
+}
+
+// NewAugmented creates a server that injects beta headers and forwards to the API.
+func NewAugmented(host string, port int, auth proxy.AuthConfig, baseURL string) *Server {
+	p := proxy.NewAugmented(auth, baseURL)
+	return &Server{host: host, port: port, messagesHandler: p.Handle}
 }
 
 // Handler returns the HTTP handler for use in tests.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/messages", s.MessagesHandler)
+	mux.HandleFunc("POST /v1/messages", s.messagesHandler)
 	mux.HandleFunc("GET /health", s.HealthHandler)
 	return mux
 }
