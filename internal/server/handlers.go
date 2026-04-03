@@ -52,7 +52,7 @@ func (s *Server) MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Stream {
-		s.handleStreaming(w, r, cliModel, prompt, tempDir)
+		s.handleStreaming(w, r, req.Model, cliModel, prompt, tempDir)
 	} else {
 		s.handleNonStreaming(w, r, req.Model, cliModel, prompt, tempDir)
 	}
@@ -71,7 +71,7 @@ func (s *Server) handleNonStreaming(w http.ResponseWriter, r *http.Request, apiM
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (s *Server) handleStreaming(w http.ResponseWriter, r *http.Request, cliModel, prompt, tempDir string) {
+func (s *Server) handleStreaming(w http.ResponseWriter, r *http.Request, apiModel, cliModel, prompt, tempDir string) {
 	stdout, wait, err := s.runner.RunStreaming(r.Context(), cliModel, prompt, tempDir)
 	if err != nil {
 		log.Printf("CLI streaming error: %v", err)
@@ -79,7 +79,7 @@ func (s *Server) handleStreaming(w http.ResponseWriter, r *http.Request, cliMode
 		return
 	}
 
-	if err := converter.StreamResponse(r.Context(), cliModel, stdout, w); err != nil {
+	if err := converter.StreamResponse(r.Context(), apiModel, stdout, w); err != nil {
 		log.Printf("streaming error: %v", err)
 	}
 
