@@ -11,14 +11,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 func main() {
 	var port int
 	var host string
 	var maxConcurrent int
 
 	rootCmd := &cobra.Command{
-		Use:   "claudecodeproxy",
-		Short: "Anthropic Messages API proxy for Claude CLI",
+		Use:     "claudecodeproxy",
+		Short:   "Anthropic Messages API proxy for Claude CLI",
+		Version: version,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Env vars override defaults but flags override env
 			if !cmd.Flags().Changed("port") {
