@@ -18,7 +18,7 @@ brews:
   - repository:
       owner: simon0191
       name: homebrew-tap
-    token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/simon0191/claudecodeproxy"
     description: "Anthropic Messages API proxy for the Claude CLI"
     license: "MIT"
