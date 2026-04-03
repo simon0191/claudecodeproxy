@@ -478,25 +478,215 @@ func TestAugmented_NoDuplicateBetas(t *testing.T) {
 	}
 }
 
-func TestAugmented_ForwardsRequestBody(t *testing.T) {
-	var gotBody string
+func TestAugmented_InjectsAttribution(t *testing.T) {
+	var gotBody map[string]json.RawMessage
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		gotBody = string(body)
+		json.Unmarshal(body, &gotBody)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"type":"message"}`))
 	}))
 	defer upstream.Close()
 
 	a := NewAugmented(AuthConfig{APIKey: "test-key"}, upstream.URL)
-	body := `{"model":"claude-sonnet-4","messages":[{"role":"user","content":"hello"}]}`
-	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4","messages":[{"role":"user","content":"hello world this is a test"}]}`))
 	w := httptest.NewRecorder()
 
 	a.Handle(w, req)
 
-	if gotBody != body {
-		t.Fatalf("request body not forwarded correctly:\nexpected: %s\ngot:      %s", body, gotBody)
+	// System prompt should be injected with attribution
+	system, ok := gotBody["system"]
+	if !ok {
+		t.Fatal("expected system field in forwarded body")
+	}
+
+	var systemBlocks []map[string]string
+	if err := json.Unmarshal(system, &systemBlocks); err != nil {
+		t.Fatalf("expected system as array of blocks: %v", err)
+	}
+
+	if len(systemBlocks) == 0 {
+		t.Fatal("expected at least one system block")
+	}
+
+	firstBlock := systemBlocks[0]["text"]
+	if !strings.Contains(firstBlock, "x-anthropic-billing-header:") {
+		t.Fatalf("expected attribution header in system prompt, got %q", firstBlock)
+	}
+	if !strings.Contains(firstBlock, "cc_version=") {
+		t.Fatalf("expected cc_version in attribution, got %q", firstBlock)
+	}
+	if !strings.Contains(firstBlock, "cc_entrypoint=cli") {
+		t.Fatalf("expected cc_entrypoint=cli in attribution, got %q", firstBlock)
+	}
+	if !strings.Contains(firstBlock, "You are Claude Code") {
+		t.Fatalf("expected Claude Code prefix in system prompt, got %q", firstBlock)
+	}
+}
+
+func TestAugmented_InjectsMetadata(t *testing.T) {
+	var gotBody map[string]json.RawMessage
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"type":"message"}`))
+	}))
+	defer upstream.Close()
+
+	a := NewAugmented(AuthConfig{APIKey: "test-key"}, upstream.URL)
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4","messages":[{"role":"user","content":"hi"}]}`))
+	w := httptest.NewRecorder()
+
+	a.Handle(w, req)
+
+	metaRaw, ok := gotBody["metadata"]
+	if !ok {
+		t.Fatal("expected metadata field in forwarded body")
+	}
+
+	var metadata map[string]string
+	if err := json.Unmarshal(metaRaw, &metadata); err != nil {
+		t.Fatalf("failed to parse metadata: %v", err)
+	}
+
+	userID, ok := metadata["user_id"]
+	if !ok {
+		t.Fatal("expected user_id in metadata")
+	}
+
+	var userIDObj map[string]string
+	if err := json.Unmarshal([]byte(userID), &userIDObj); err != nil {
+		t.Fatalf("expected user_id to be JSON, got %q", userID)
+	}
+
+	if userIDObj["device_id"] == "" {
+		t.Fatal("expected non-empty device_id")
+	}
+	if userIDObj["session_id"] == "" {
+		t.Fatal("expected non-empty session_id")
+	}
+}
+
+func TestAugmented_PreservesExistingSystemString(t *testing.T) {
+	var gotBody map[string]json.RawMessage
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"type":"message"}`))
+	}))
+	defer upstream.Close()
+
+	a := NewAugmented(AuthConfig{APIKey: "test-key"}, upstream.URL)
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4","system":"You are a pirate","messages":[{"role":"user","content":"hi"}]}`))
+	w := httptest.NewRecorder()
+
+	a.Handle(w, req)
+
+	var systemStr string
+	if err := json.Unmarshal(gotBody["system"], &systemStr); err != nil {
+		t.Fatalf("expected system as string: %v", err)
+	}
+
+	if !strings.Contains(systemStr, "x-anthropic-billing-header:") {
+		t.Fatalf("expected attribution in system, got %q", systemStr)
+	}
+	if !strings.Contains(systemStr, "You are a pirate") {
+		t.Fatalf("expected original system prompt preserved, got %q", systemStr)
+	}
+}
+
+func TestAugmented_PreservesExistingSystemArray(t *testing.T) {
+	var gotBody map[string]json.RawMessage
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"type":"message"}`))
+	}))
+	defer upstream.Close()
+
+	a := NewAugmented(AuthConfig{APIKey: "test-key"}, upstream.URL)
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4","system":[{"type":"text","text":"You are a pirate"}],"messages":[{"role":"user","content":"hi"}]}`))
+	w := httptest.NewRecorder()
+
+	a.Handle(w, req)
+
+	var blocks []map[string]string
+	if err := json.Unmarshal(gotBody["system"], &blocks); err != nil {
+		t.Fatalf("expected system as array: %v", err)
+	}
+
+	if len(blocks) != 2 {
+		t.Fatalf("expected 2 system blocks (attribution + original), got %d", len(blocks))
+	}
+	if !strings.Contains(blocks[0]["text"], "x-anthropic-billing-header:") {
+		t.Fatalf("expected attribution in first block, got %q", blocks[0]["text"])
+	}
+	if blocks[1]["text"] != "You are a pirate" {
+		t.Fatalf("expected original system prompt in second block, got %q", blocks[1]["text"])
+	}
+}
+
+func TestAugmented_PreservesMessages(t *testing.T) {
+	var gotBody map[string]json.RawMessage
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"type":"message"}`))
+	}))
+	defer upstream.Close()
+
+	a := NewAugmented(AuthConfig{APIKey: "test-key"}, upstream.URL)
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4","messages":[{"role":"user","content":"hello"}]}`))
+	w := httptest.NewRecorder()
+
+	a.Handle(w, req)
+
+	// Messages should be preserved unchanged
+	var messages []map[string]interface{}
+	json.Unmarshal(gotBody["messages"], &messages)
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(messages))
+	}
+	if messages[0]["content"] != "hello" {
+		t.Fatalf("expected message content 'hello', got %v", messages[0]["content"])
+	}
+}
+
+// --- computeFingerprint tests ---
+
+func TestComputeFingerprint(t *testing.T) {
+	// The fingerprint should be 3 hex chars
+	fp := computeFingerprint("hello world this is a test", "2.1.91")
+	if len(fp) != 3 {
+		t.Fatalf("expected 3-char fingerprint, got %q (len %d)", fp, len(fp))
+	}
+
+	// Same input should produce same output
+	fp2 := computeFingerprint("hello world this is a test", "2.1.91")
+	if fp != fp2 {
+		t.Fatalf("expected deterministic fingerprint, got %q and %q", fp, fp2)
+	}
+
+	// Different input should produce different output
+	fp3 := computeFingerprint("different message text here", "2.1.91")
+	if fp == fp3 {
+		t.Logf("warning: different messages produced same fingerprint %q (unlikely but possible)", fp)
+	}
+
+	// Short message (< 21 chars) should still work
+	fp4 := computeFingerprint("hi", "2.1.91")
+	if len(fp4) != 3 {
+		t.Fatalf("expected 3-char fingerprint for short message, got %q", fp4)
+	}
+
+	// Empty message should work
+	fp5 := computeFingerprint("", "2.1.91")
+	if len(fp5) != 3 {
+		t.Fatalf("expected 3-char fingerprint for empty message, got %q", fp5)
 	}
 }
 
