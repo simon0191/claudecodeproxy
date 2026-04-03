@@ -14,6 +14,15 @@ builds:
 archives:
   - format: tar.gz
 
+nfpms:
+  - package_name: claudecodeproxy
+    homepage: "https://github.com/simon0191/claudecodeproxy"
+    description: "Anthropic Messages API proxy for the Claude CLI"
+    license: "MIT"
+    formats:
+      - deb
+    maintainer: "Simon Soriano"
+
 brews:
   - repository:
       owner: simon0191
