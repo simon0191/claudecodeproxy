@@ -320,6 +320,44 @@ func TestE2E_Messages_WithSystem(t *testing.T) {
 	}
 }
 
+func TestE2E_Messages_WithSystemArray(t *testing.T) {
+	ts, runner := testServer(&fakeRunner{
+		result: &types.CLIResult{
+			Result:     "Arrr!",
+			StopReason: "end_turn",
+		},
+	})
+	defer ts.Close()
+
+	resp := postMessages(t, ts.URL, `{
+		"model": "claude-sonnet-4",
+		"max_tokens": 1024,
+		"system": [{"type": "text", "text": "You are a pirate. You must include the word 'arrr' in every response."}],
+		"messages": [{"role": "user", "content": "Hello, how are you?"}]
+	}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, b)
+	}
+
+	result := decodeResponse(t, resp)
+	assertValidResponse(t, result)
+
+	if isRealCLI() {
+		if !strings.Contains(strings.ToLower(result.Content[0].Text), "arrr") {
+			t.Fatalf("expected pirate response containing 'arrr', got %q", result.Content[0].Text)
+		}
+		t.Logf("Pirate response (array system): %q", result.Content[0].Text)
+	} else {
+		expected := "<system>\nYou are a pirate. You must include the word 'arrr' in every response.\n</system>\n\nHello, how are you?"
+		if runner.gotPrompt != expected {
+			t.Fatalf("expected prompt:\n%s\ngot:\n%s", expected, runner.gotPrompt)
+		}
+	}
+}
+
 func TestE2E_Messages_WithImage(t *testing.T) {
 	imgB64 := loadTestFile(t, "cat.png")
 

@@ -6,7 +6,7 @@ import "encoding/json"
 type MessagesRequest struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
-	System      string    `json:"system,omitempty"`
+	System      Content   `json:"system,omitempty"`
 	MaxTokens   int       `json:"max_tokens"`
 	Stream      bool      `json:"stream,omitempty"`
 	Temperature *float64  `json:"temperature,omitempty"`

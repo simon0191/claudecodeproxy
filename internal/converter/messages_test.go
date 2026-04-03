@@ -10,7 +10,7 @@ func TestConvertMessages_SingleUser(t *testing.T) {
 	msgs := []types.Message{
 		{Role: "user", Content: types.Content{Blocks: []types.ContentBlock{{Type: "text", Text: "Hello"}}}},
 	}
-	prompt, files, err := ConvertMessages("", msgs)
+	prompt, files, err := ConvertMessages(types.Content{}, msgs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,11 +26,29 @@ func TestConvertMessages_WithSystem(t *testing.T) {
 	msgs := []types.Message{
 		{Role: "user", Content: types.Content{Blocks: []types.ContentBlock{{Type: "text", Text: "Hi"}}}},
 	}
-	prompt, _, err := ConvertMessages("You are helpful", msgs)
+	prompt, _, err := ConvertMessages(types.Content{Blocks: []types.ContentBlock{{Type: "text", Text: "You are helpful"}}}, msgs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	expected := "<system>\nYou are helpful\n</system>\n\nHi"
+	if prompt != expected {
+		t.Fatalf("expected %q, got %q", expected, prompt)
+	}
+}
+
+func TestConvertMessages_WithSystemBlocks(t *testing.T) {
+	msgs := []types.Message{
+		{Role: "user", Content: types.Content{Blocks: []types.ContentBlock{{Type: "text", Text: "Hi"}}}},
+	}
+	system := types.Content{Blocks: []types.ContentBlock{
+		{Type: "text", Text: "You are helpful."},
+		{Type: "text", Text: " Be concise."},
+	}}
+	prompt, _, err := ConvertMessages(system, msgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "<system>\nYou are helpful. Be concise.\n</system>\n\nHi"
 	if prompt != expected {
 		t.Fatalf("expected %q, got %q", expected, prompt)
 	}
@@ -42,7 +60,7 @@ func TestConvertMessages_MultiTurn(t *testing.T) {
 		{Role: "assistant", Content: types.Content{Blocks: []types.ContentBlock{{Type: "text", Text: "Hi there!"}}}},
 		{Role: "user", Content: types.Content{Blocks: []types.ContentBlock{{Type: "text", Text: "How are you?"}}}},
 	}
-	prompt, _, err := ConvertMessages("", msgs)
+	prompt, _, err := ConvertMessages(types.Content{}, msgs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +71,7 @@ func TestConvertMessages_MultiTurn(t *testing.T) {
 }
 
 func TestConvertMessages_Empty(t *testing.T) {
-	prompt, files, err := ConvertMessages("", nil)
+	prompt, files, err := ConvertMessages(types.Content{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
