@@ -249,8 +249,7 @@ The `Content` type has a custom `UnmarshalJSON` that handles both forms. A plain
 ## Project structure
 
 ```
-apps/claudecodeproxy/
-  cmd/claudecodeproxy/
+cmd/claudecodeproxy/
     main.go               # Cobra CLI: flags, env vars, server startup
   internal/
     types/
