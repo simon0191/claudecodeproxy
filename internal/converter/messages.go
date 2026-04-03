@@ -12,12 +12,12 @@ import (
 // string for the Claude CLI. Media content blocks are saved as temp files and
 // referenced in the prompt. Returns the prompt string and a list of temp file
 // paths that should be cleaned up after the CLI completes.
-func ConvertMessages(system string, messages []types.Message) (string, []string, error) {
+func ConvertMessages(system types.Content, messages []types.Message) (string, []string, error) {
 	var parts []string
 	var tempFiles []string
 
-	if system != "" {
-		parts = append(parts, "<system>\n"+system+"\n</system>")
+	if len(system.Blocks) > 0 {
+		parts = append(parts, "<system>\n"+system.TextContent()+"\n</system>")
 	}
 
 	for _, msg := range messages {

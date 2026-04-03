@@ -57,6 +57,41 @@ func TestContentUnmarshal_WithMedia(t *testing.T) {
 	}
 }
 
+func TestMessagesRequest_SystemAsString(t *testing.T) {
+	input := `{
+		"model": "claude-sonnet-4",
+		"max_tokens": 1024,
+		"system": "You are helpful",
+		"messages": [{"role": "user", "content": "Hello"}]
+	}`
+	var req MessagesRequest
+	if err := json.Unmarshal([]byte(input), &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.System.TextContent() != "You are helpful" {
+		t.Fatalf("expected 'You are helpful', got %q", req.System.TextContent())
+	}
+}
+
+func TestMessagesRequest_SystemAsArray(t *testing.T) {
+	input := `{
+		"model": "claude-sonnet-4",
+		"max_tokens": 1024,
+		"system": [{"type": "text", "text": "You are helpful."}],
+		"messages": [{"role": "user", "content": "Hello"}]
+	}`
+	var req MessagesRequest
+	if err := json.Unmarshal([]byte(input), &req); err != nil {
+		t.Fatal(err)
+	}
+	if req.System.TextContent() != "You are helpful." {
+		t.Fatalf("expected 'You are helpful.', got %q", req.System.TextContent())
+	}
+	if len(req.System.Blocks) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(req.System.Blocks))
+	}
+}
+
 func TestMessagesRequest_FullParse(t *testing.T) {
 	input := `{
 		"model": "claude-sonnet-4",
